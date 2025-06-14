@@ -561,8 +561,13 @@ int net_send_batch(
                smaller (reasonable packet sizes), and our rand() range much
                larger, this effect is insignificant. Oh! That other formula
                didn't work. */
-            packetsize =
-                MINPACKET + rand() % (-ctl->cpacketsize - MINPACKET);
+            if (-ctl->cpacketsize <= MINPACKET) {
+                /* There is no room to introduce randomness. */
+                packetsize = MINPACKET;
+            } else {
+                packetsize =
+                    MINPACKET + rand() % (-ctl->cpacketsize - MINPACKET);
+            }
         } else {
             packetsize = ctl->cpacketsize;
         }
@@ -687,8 +692,8 @@ static void net_find_interface_address_from_name(
   host by connecting a UDP socket and checking the address
   the socket is bound to.
 */
-static void net_find_local_address(
-    void)
+static
+void net_find_local_address(struct mtr_ctl * ctl)
 {
     int udp_socket;
     int addr_length;
@@ -699,6 +704,15 @@ static void net_find_local_address(
     if (udp_socket == -1) {
         error(EXIT_FAILURE, errno, "udp socket creation failed");
     }
+
+#ifdef SO_MARK
+    /* On Linux, the packet mark can affect the selection of the source address */
+    if(ctl->mark) {
+        if(setsockopt(udp_socket, SOL_SOCKET, SO_MARK, &ctl->mark, sizeof(ctl->mark))) {
+            error(EXIT_FAILURE, errno, "failed to set the packet mark");
+        }
+    }
+#endif
 
     /*
        We need to set the port to a non-zero value for the connect
@@ -778,7 +792,7 @@ void net_reopen(
             &sourcesockaddr_struct, ctl->af, ctl->InterfaceName);
         inet_ntop(sourcesockaddr->sa_family, sourceaddress, localaddr, sizeof(localaddr));
     } else {
-        net_find_local_address();
+        net_find_local_address(ctl);
     }
 
 }
@@ -881,6 +895,7 @@ int addrcmp(
         break;
 #ifdef ENABLE_IPV6
     case AF_INET6:
+    case AF_UNSPEC:
         rc = memcmp(a, b, sizeof(struct in6_addr));
         break;
 #endif
