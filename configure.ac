@@ -25,7 +25,7 @@ m4_ifndef([PKG_CHECK_MODULES], [m4_defun([PKG_CHECK_MODULES], [AC_MSG_ERROR(
 [Could not locate the pkg-config autoconf macros.  These are usually located
 in /usr/share/aclocal/pkg.m4.  If your macros are in a different location,
 try setting the environment variable ACLOCAL_OPTS="-I/other/macro/dir"
-before running ./bootstrap.sh again, or configure --without-gtk ----without-jansson ])])
+before running ./bootstrap.sh again, or configure --without-gtk --without-jansson ])])
 ])
 PKG_PROG_PKG_CONFIG
 
@@ -112,6 +112,20 @@ AS_IF([test "x$with_jansson" = "xyes"],
     [with_jansson=no])
 ])
 
+# Find ncursesw
+AC_ARG_WITH([ncursesw],
+  [AS_HELP_STRING([--without-ncursesw], [Build without the ncursesw interface])],
+  [], [with_ncursesw=yes])
+AS_IF([test "x$with_ncursesw" = "xyes"],
+
+  # Prefer ncursesw, if available
+  [AC_SEARCH_LIBS(
+    [wprintw], [ncursesw],
+    [AC_DEFINE([HAVE_CURSESW], [1], [Define if a ncursesw library available])],
+    [with_ncursesw=no])
+])
+AM_CONDITIONAL([WITH_CURSESW], [test "x$with_ncursesw" = xyes])
+
 # Find ncurses
 AC_ARG_WITH([ncurses],
   [AS_HELP_STRING([--without-ncurses], [Build without the ncurses interface])],
@@ -121,15 +135,19 @@ AS_IF([test "x$with_ncurses" = "xyes"],
   # Prefer ncurses over curses, if both are available.
   # (On Solaris 11.3, ncurses builds and links for us, but curses does not.)
   [AC_SEARCH_LIBS(
-    [initscr], [ncurses curses],
+    [initscr], [ncursesw ncurses curses],
     [AC_DEFINE([HAVE_CURSES], [1], [Define if a curses library available])],
     [with_ncurses=no])
 ])
 AM_CONDITIONAL([WITH_CURSES], [test "x$with_ncurses" = xyes])
 
-AC_CHECK_LIB([cap], [cap_set_proc], [have_cap="yes"],
-  AS_IF([test "$host_os" = linux-gnu],
-    AC_MSG_WARN([Capabilities support is strongly recommended for increased security.  See SECURITY for more information.])))
+have_cap="yes"
+AC_CHECK_LIB([cap], [cap_set_proc], [], [
+  have_cap="no"
+  AS_IF([test "$host_os" = linux-gnu], [
+    AC_MSG_WARN([Capabilities support is strongly recommended for increased security.  See SECURITY for more information.])
+  ])
+])
 
 # Enable ipinfo
 AC_ARG_WITH([ipinfo],
@@ -147,6 +165,15 @@ AC_ARG_ENABLE([ipv6],
 AS_IF([test "x$WANTS_IPV6" = "xyes"], [
   AC_DEFINE([ENABLE_IPV6], [1], [Define to enable IPv6])
   USES_IPV6=yes
+])
+
+AC_ARG_ENABLE([braille],
+  [AS_HELP_STRING([--disable-braille], [Do not enable barille character graphs])],
+  [WANTS_BRAILLE=$enableval], [WANTS_BRAILLE=yes])
+
+AS_IF([test "x$WANTS_BRAILLE" = "xyes"], [
+  AC_DEFINE([ENABLE_BRAILLE], [1], [Define to enable uncode braille character graphs])
+  USES_BRAILLE=yes
 ])
 
 AC_CHECK_FUNC([socket], [],
@@ -262,15 +289,17 @@ AC_ARG_ENABLE([bash-completion],
 AM_CONDITIONAL([BUILD_BASH_COMPLETION], [test "x$enable_bash_completion" = xyes])
 echo "build options:"
 echo "--------------"
-echo "libasan :$with_libasan"
-echo "ipv6    :$USES_IPV6"
-echo "ipinfo  :$with_ipinfo"
-echo "ncurses :$with_ncurses"
-echo "gtk     :$with_gtk"
-echo "jansson :$with_jansson"
-echo "cap     :$have_cap"
-echo "libs    :$LIBS"
-echo "cflags  :$CFLAGS"
+echo "libasan  :$with_libasan"
+echo "ipv6     :$USES_IPV6"
+echo "braille  :$USES_BRAILLE"
+echo "ipinfo   :$with_ipinfo"
+echo "ncursesw :$with_ncursesw"
+echo "ncurses  :$with_ncurses"
+echo "gtk      :$with_gtk"
+echo "jansson  :$with_jansson"
+echo "cap      :$have_cap"
+echo "libs     :$LIBS"
+echo "cflags   :$CFLAGS"
 echo "--------------"
 # Prepare config.h, Makefile, and output them.
 AC_CONFIG_HEADERS([config.h])
